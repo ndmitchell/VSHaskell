@@ -119,6 +119,7 @@
     <Compile Include="EditorFactory.cs" />
     <Compile Include="Guids.cs" />
     <Compile Include="HaskellService.cs" />
+    <Compile Include="Lexer.cs" />
     <Compile Include="Resources.Designer.cs">
       <AutoGen>True</AutoGen>
       <DesignTime>True</DesignTime>

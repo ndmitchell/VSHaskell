@@ -73,7 +73,7 @@ namespace WellTyped.Haskell
             //Trace.WriteLine(string.Format(CultureInfo.CurrentCulture, "Entering GetScanner() of: {0}", this.ToString()));
             if (m_scanner == null)
             {
-                m_scanner = new HsScanner(buffer);
+                m_scanner = new HsScanner();
             }
             return m_scanner;
         }
@@ -192,29 +192,53 @@ namespace WellTyped.Haskell
 
 internal class HsScanner : IScanner
 {
-    IVsTextBuffer m_buffer;
-    string m_source;
-
-    public HsScanner(IVsTextLines buffer)
-    {
-        m_buffer = buffer;
-    }
+    private int offset;
+    private string source;
+    private VisualStudio.Haskell.Lexer.Lexeme[] tokens;
+    private int index;
+    private int state;
 
     public bool ScanTokenAndProvideInfoAboutIt(TokenInfo tokenInfo, ref int state)
     {
-        //Trace.WriteLine(string.Format(CultureInfo.CurrentCulture, "Entering ScanTokenAndProvideInfoAboutIt() of: {0}, state {1}", this.ToString(), state));
-        tokenInfo.Type = TokenType.Comment;
-        tokenInfo.Color = TokenColor.Comment;
-        state = state + 1;
-        return false;
+        if (tokens == null && source != null)
+        {
+            var st = (VisualStudio.Haskell.Lexer.LineState) state;
+            tokens = VisualStudio.Haskell.Lexer.Forward(source.Substring(offset), ref st);
+            source = null;
+            this.state = (int) st;
+        }
+
+        if (tokens == null || index >= tokens.Length) return false;
+
+        var t = tokens[index];
+        index++;
+        tokenInfo.StartIndex = t.Start + offset;
+        tokenInfo.EndIndex = t.Start + offset + t.Length - 1;
+        if (VisualStudio.Haskell.Lexer.IsKeyword(t.Token))
+            tokenInfo.Color = TokenColor.Keyword;
+        else if (VisualStudio.Haskell.Lexer.IsComment(t.Token))
+            tokenInfo.Color = TokenColor.Comment;
+        else if (VisualStudio.Haskell.Lexer.IsString(t.Token))
+            tokenInfo.Color = TokenColor.String;
+        else
+            tokenInfo.Color = TokenColor.Text;
+        var brack = VisualStudio.Haskell.Lexer.IsBracket(t.Token);
+        tokenInfo.Type = brack ? TokenType.Delimiter : TokenType.Unknown;
+        tokenInfo.Trigger = brack ? TokenTriggers.MatchBraces : TokenTriggers.None;
+        if (index == tokens.Length)
+            state = this.state;
+        return true;
     }
 
     public void SetSource(string source, int offset)
     {
-        //Trace.WriteLine(string.Format(CultureInfo.CurrentCulture, "Entering SetSource() of: {0}", this.ToString()));
-        m_source = source.Substring(offset);
-        //Trace.WriteLine(string.Format(CultureInfo.CurrentCulture, m_source));
+        this.offset = offset;
+        this.source = source;
+        index = 0;
+        tokens = null;
     }
+
+    public static bool UseNewScanner = true;
 }
 
 internal class HsAuthoringScope : AuthoringScope
